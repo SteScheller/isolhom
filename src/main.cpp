@@ -11,6 +11,7 @@ namespace po = boost::program_options;
 #include <gnuplot-iostream.h>
 
 #include "configraw/configraw.hpp"
+#include "calc/lhom.hpp"
 
 //-----------------------------------------------------------------------------
 // function prototypes
@@ -31,6 +32,9 @@ int main(int argc, char *argv[])
         << std::endl;
     std::cout << "Number of timesteps: " << data.getNumTimesteps() <<
         std::endl;
+
+
+    calc::calcLHOM();
 
     return EXIT_SUCCESS;
 }

@@ -5,14 +5,17 @@ BUILD_DIR = build
 
 SOURCES = src/main.cpp
 SOURCES += src/configraw/configraw.cpp
+SOURCES += src/calc/lhom.cu
 
 OBJS = $(addsuffix .o, $(basename $(SOURCES)))
 
 INCLUDE = -I./src -I./src/configraw
 INCLUDE += -I./include -I./lib/gnuplot-iostream -I./lib/nlohmann
+LDINCLUDE = -L/usr/local/cuda/lib64
 
 CC = cc
 CXX = g++
+CUDAC = nvcc
 LINKER = ld
 
 CXXFLAGS = $(INCLUDE) -std=c++14 -fopenmp
@@ -25,7 +28,12 @@ CFLAGS += -Wall -Wextra
 DEBUG_CFLAGS = -DDEBUG -g
 RELEASE_CFLAGS = -DRELEASE -O3
 
-LDFLAGS = -fopenmp
+CUDACFLAGS = $(INCLUDE) -std=c++14 --gpu-architecture=compute_30
+DEBUG_CUDACFLAGS = -DDEBUG -g
+RELEASE_CUDACFLAGS = -DRELEASE -O3
+
+LDFLAGS = $(LDINCLUDE) -fopenmp
+LDFLAGS += -lcuda -lcudart
 LDFLAGS += -lboost_system -lboost_filesystem -lboost_regex
 LDFLAGS += -lboost_iostreams -lboost_program_options
 
@@ -35,12 +43,14 @@ defaul: debug
 
 debug: CADDITIONALFLAGS = $(DEBUG_CFLAGS)
 debug: CXXADDITIONALFLAGS = $(DEBUG_CXXFLAGS)
+debug: CUDACADDITIONALFLAGS = $(DEBUG_CUDACFLAGS)
 debug: TARGET_DIR = $(BUILD_DIR)/debug
 debug: $(BUILD_DIR) $(BUILD_DIR)/debug start $(TARGET)
 	@echo Build of standalone executable complete!
 
 release: CADDITIONALFLAGS = $(RELEASE_CFLAGS)
 release: CXXADDITIONALFLAGS = $(RELEASE_CXXFLAGS)
+release: CUDACADDITIONALFLAGS = $(RELEASE_CUDACFLAGS)
 release: TARGET_DIR = $(BUILD_DIR)/release
 release: $(BUILD_DIR) $(BUILD_DIR)/release start $(TARGET)
 	@echo Build of standalone executable complete!
@@ -51,6 +61,7 @@ start:
 	@echo
 	@echo CXXFLAGS: $(CXXFLAGS) $(CXXADDITIONALFLAGS)
 	@echo CFLAGS: $(CFLAGS) $(CADDITIONALFLAGS)
+	@echo CUDACFLAGS: $(CUDACFLAGS) $(CUDACADDITIONALFLAGS)
 	@echo TARGET_DIR $(TARGET_DIR)
 	@echo
 
@@ -60,7 +71,11 @@ start:
 
 %.o: %.c
 	@echo $<
-	@$(CC) $(CFLAGS)  $(CADDITIONALFLAGS) -c -o $(TARGET_DIR)/$(@F) $<
+	@$(CC) $(CFLAGS) $(CADDITIONALFLAGS) -c -o $(TARGET_DIR)/$(@F) $<
+
+%.o: %.cu
+	@echo $<
+	@$(CUDAC) $(CUDACFLAGS) $(CUDACADDITIONALFLAGS) -c -o $(TARGET_DIR)/$(@F) $<
 
 $(BUILD_DIR):
 	@echo Creating build directory...
