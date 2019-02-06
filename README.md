@@ -1,9 +1,8 @@
 # Salient Isosurface Detection with Local Higher Order Moments
-
 Implementation of:
 
-Salient Iso-Surface Detection with Model-Independent Statistical Signatures
-Shivaraj Tenginakai, Jinho Lee, Raghu Machiraju
+"Salient Iso-Surface Detection with Model-Independent Statistical Signatures"  
+by Shivaraj Tenginakai, Jinho Lee, Raghu Machiraju
 
 <https://ieeexplore.ieee.org/abstract/document/964516>
 
