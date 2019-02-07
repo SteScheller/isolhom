@@ -11,7 +11,8 @@ INCLUDES = [
         'include',
         'lib/gnuplot-iostream',
         'lib/nlohmann',
-        'src/configraw']
+        'src/configraw',
+        'src/calc']
 FLAGS = [
         '-std=c++14',
         '-Wall', '-Wextra']
