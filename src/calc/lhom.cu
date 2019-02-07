@@ -159,6 +159,7 @@ std::vector<std::array<float, 2>> calc::calcLHOM(
             resultDevMem,
             resultDevMemSize,
             cudaMemcpyDeviceToHost);
+    cudaFree(volumeDevMem);
     cudaFree(resultDevMem);
 
     return results;
