@@ -38,10 +38,6 @@ int main(int argc, char *argv[])
     if (!volumeConfig.isValid())
         return EXIT_FAILURE;
 
-    // check if CUDA is available
-    std::cout << "Running CUDA example code:" << std::endl;
-    std::cout << calc::example<int>() << std::endl;
-
     // calculate skew and kurtosis
     // TODO: write loop and iterate over timesteps
     std::cout << "Calculating LHOMs" << std::endl;
@@ -49,23 +45,10 @@ int main(int argc, char *argv[])
     volumeData = cr::loadScalarVolumeTimestep(volumeConfig, 42, false);
 
     std::vector<std::array<float, 2>> lhoms;
-    /*lhoms = calc::calcLHOM<unsigned_byte_t>(
+    lhoms = calc::calcLHOM<unsigned_byte_t>(
         reinterpret_cast<unsigned_byte_t*>(volumeData->getRawData()),
         volumeConfig.getVolumeDim(),
-        {5, 5, 5});*/
-    std::vector<unsigned_byte_t> dummy(64*32*16, 0);
-    lhoms = calc::calcLHOM<unsigned_byte_t>(
-        dummy.data(),
-        {64, 32, 16},
         {5, 5, 5});
-
-    std::array<float, 3> sample;
-    size_t idx = 0;
-    sample = lhoms[idx];
-    std::cout << "x = y = z = 0: " << sample[0] << " " << sample[1] << " " << sample[2] << " " << std::endl;
-    idx = 15 * 32 * 64 + 31 * 64 + 63;
-    sample = lhoms[idx];
-    std::cout << "x = 63, y = 31, z = 15: " << sample[0] << " " << sample[1] << " " << sample[2] << " " << std::endl;
 
     // TODO: write stuff to csv or something similar
 

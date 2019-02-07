@@ -8,9 +8,6 @@ namespace calc
     //-------------------------------------------------------------------------
     // Function declarations
     //-------------------------------------------------------------------------
-    template<typename T>
-    T example();
-
     /**
      * \brief calculates voxelwise local skew and curtosis for a given volume
      *
@@ -20,7 +17,7 @@ namespace calc
      *                      considered for the calculation of skew and curtosis
      */
     template<typename T>
-    std::vector<std::array<float, 3>> calcLHOM(
+    std::vector<std::array<float, 2>> calcLHOM(
         T* volumeData,
         std::array<size_t, 3> volumeDim,
         std::array<size_t, 3> windowDim);
