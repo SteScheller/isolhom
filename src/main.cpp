@@ -14,6 +14,7 @@ namespace po = boost::program_options;
 
 #include "configraw/configraw.hpp"
 #include "calc/calc.hpp"
+#include "progbar/progbar.hpp"
 
 //-----------------------------------------------------------------------------
 // function prototypes
@@ -42,22 +43,10 @@ int main(int argc, char *argv[])
 
     // calculate skew and kurtosis
     std::cout << "Calculating LHOMs" << std::endl;
-    float progress = 0.f;
+    util::ProgressBar progbar(50, volumeConfig.getNumTimesteps());
     for (size_t i = 0; i < volumeConfig.getNumTimesteps(); ++i)
     {
-        // print progress bar (https://stackoverflow.com/a/14539953/2546289)
-        int barWidth = 30;
-        std::cout << "[";
-        int pos = barWidth * progress;
-        for (int i = 0; i < barWidth; ++i)
-        {
-            if (i < pos) std::cout << "=";
-            else if (i == pos) std::cout << ">";
-            else std::cout << " ";
-        }
-        std::cout << "] " << int(progress * 100.0) << " %\r";
-        progress +=
-            1.f / static_cast<float>(volumeConfig.getNumTimesteps());
+        progbar.print();
 
         // load data of current timestep
         std::unique_ptr<cr::VolumeDataBase> volumeData;
@@ -71,8 +60,12 @@ int main(int argc, char *argv[])
             {5, 5, 5});
 
         // TODO: write stuff to csv or something similar
+
+        ++progbar;
     }
-    std::cout << "[==============================] 100 % Done!" << std::endl;
+    ++progbar;
+    progbar.print();
+
     std::cout << output << std::endl;
 
     return EXIT_SUCCESS;

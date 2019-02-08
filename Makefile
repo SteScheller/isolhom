@@ -6,6 +6,7 @@ BUILD_DIR = build
 SOURCES = src/main.cpp
 SOURCES += src/configraw/configraw.cpp
 SOURCES += src/calc/lhom.cu
+SOURCES += src/progbar/progbar.hpp
 
 OBJS = $(addsuffix .o, $(basename $(SOURCES)))
 
