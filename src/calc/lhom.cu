@@ -34,7 +34,7 @@ int3 offsetVolumeCoordinate(int3 coord, int3 offset, dim3 volumeDim)
 template<typename T>
 __global__
 void lhom(
-        float* results,
+        double* results,
         T* volumeData,
         dim3 volumeDim,
         dim3 windowDim)
@@ -58,7 +58,8 @@ void lhom(
             volCoord.z * volumeDim.y * volumeDim.x +
             volCoord.y * volumeDim.x +
             volCoord.x;
-    float mean = 0.f;
+    double mean = 0.0;
+    double kDiv = 1.0 / ((double) (windowDim.x * windowDim.y * windowDim.z));
     for (unsigned int wz = 0; wz < windowDim.z; ++wz)
     for (unsigned int wy = 0; wy < windowDim.y; ++wy)
     for (unsigned int wx = 0; wx < windowDim.x; ++wx)
@@ -70,11 +71,10 @@ void lhom(
             volCoordOffset.z * volumeDim.y * volumeDim.x +
             volCoordOffset.y * volumeDim.x +
             volCoordOffset.x;
-        mean += (float) volumeData[vIdx];
+        mean += kDiv * ((double) volumeData[vIdx]);
     }
-    mean /= (float) (windowDim.x * windowDim.y * windowDim.z);
 
-    float m2 = 0.f, m3 = 0.f, m4 = 0.f;
+    double m2 = 0.0, m3 = 0.0, m4 = 0.0;
     for (unsigned int wz = 0; wz < windowDim.z; ++wz)
     for (unsigned int wy = 0; wy < windowDim.y; ++wy)
     for (unsigned int wx = 0; wx < windowDim.x; ++wx)
@@ -86,20 +86,17 @@ void lhom(
             volCoordOffset.z * volumeDim.y * volumeDim.x +
             volCoordOffset.y * volumeDim.x +
             volCoordOffset.x;
-        float val = (float) volumeData[vIdx];
-        m2 += powf((val - mean), 2.f);
-        m3 += powf((val - mean), 3.f);
-        m4 += powf((val - mean), 4.f);
+        double val = (double) volumeData[vIdx];
+        m2 += kDiv * pow((val - mean), 2.0);
+        m3 += kDiv * pow((val - mean), 3.0);
+        m4 += kDiv * pow((val - mean), 4.0);
     }
-    m2 /= (float) (windowDim.x * windowDim.y * windowDim.z);
-    m3 /= (float) (windowDim.x * windowDim.y * windowDim.z);
-    m4 /= (float) (windowDim.x * windowDim.y * windowDim.z);
 
     // calculate skew and kurtosis and store them
-    float skew = m3 / powf(m2, 1.5f);
-    float kurtosis = (m4 - 3.f * powf(m2, 2.f)) / powf(m2, 2.f);
-    results[centerIdx] = skew;
-    results[centerIdx + 1] = kurtosis;
+    double skew = m3 / pow(m2, 1.5);
+    double kurtosis = (m4 - 3.0 * pow(m2, 2.0)) / pow(m2, 2.0);
+    results[centerIdx << 1] = skew;
+    results[(centerIdx << 1) + 1] = kurtosis;
 }
 
 
@@ -107,16 +104,16 @@ void lhom(
 // Host wrapper functions
 //-----------------------------------------------------------------------------
 template<typename T>
-std::vector<std::array<float, 2>> calc::calcLHOM(
+std::vector<std::array<double, 2>> calc::calcLHOM(
     T* volumeData,
     std::array<size_t, 3> volumeDim,
     std::array<size_t, 3> windowDim)
 {
     size_t n = volumeDim[0] * volumeDim[1] * volumeDim[2];
-    std::vector<std::array<float, 2>> results(n, {0.f, -2.f});
+    std::vector<std::array<double, 2>> results(n, {0.0, -2.0});
 
-    size_t resultDevMemSize = n * 2 * sizeof(float);
-    float* resultDevMem = nullptr;
+    size_t resultDevMemSize = n * 2 * sizeof(double);
+    double* resultDevMem = nullptr;
     size_t volumeDevMemSize = n * sizeof(T);
     T* volumeDevMem = nullptr;
 
@@ -132,19 +129,19 @@ std::vector<std::array<float, 2>> calc::calcLHOM(
     dim3 numBlocks;
     dim3 numThreads(8, 8, 8);
 
-    numBlocks.x = static_cast<unsigned int>(0.5f +
-            std::ceil(static_cast<float>(volumeDim[0]) /
-                static_cast<float>(numThreads.x)));
-    numBlocks.y = static_cast<unsigned int>(0.5f +
-            std::ceil(static_cast<float>(volumeDim[1]) /
-                static_cast<float>(numThreads.y)));
-    numBlocks.z = static_cast<unsigned int>(0.5f +
-            std::ceil(static_cast<float>(volumeDim[2]) /
-                static_cast<float>(numThreads.z)));
+    numBlocks.x = static_cast<unsigned int>(0.5 +
+            std::ceil(static_cast<double>(volumeDim[0]) /
+                static_cast<double>(numThreads.x)));
+    numBlocks.y = static_cast<unsigned int>(0.5 +
+            std::ceil(static_cast<double>(volumeDim[1]) /
+                static_cast<double>(numThreads.y)));
+    numBlocks.z = static_cast<unsigned int>(0.5 +
+            std::ceil(static_cast<double>(volumeDim[2]) /
+                static_cast<double>(numThreads.z)));
 
     lhom<T><<<numBlocks, numThreads>>>(
             resultDevMem,
-            volumeData,
+            volumeDevMem,
             {   static_cast<unsigned int>(volumeDim[0]),
                 static_cast<unsigned int>(volumeDim[1]),
                 static_cast<unsigned int>(volumeDim[2]) },
@@ -168,7 +165,7 @@ std::vector<std::array<float, 2>> calc::calcLHOM(
 //-----------------------------------------------------------------------------
 // Instantiations of templated functions
 //-----------------------------------------------------------------------------
-template std::vector<std::array<float, 2>> calc::calcLHOM<uint8_t>(
+template std::vector<std::array<double, 2>> calc::calcLHOM<uint8_t>(
     uint8_t *volumeData,
     std::array<size_t, 3> volumeDim,
     std::array<size_t, 3> windowDim);

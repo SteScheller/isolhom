@@ -20,7 +20,8 @@ namespace util
 
         /** \brief Iterates the internal progress meter
          */
-        void operator++();
+        ProgressBar& operator++();
+        ProgressBar operator++(int dummy);
 
         private:
         unsigned int m_width;

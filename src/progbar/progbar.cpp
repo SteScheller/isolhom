@@ -44,8 +44,19 @@ void util::ProgressBar::print()
     }
 }
 
-void util::ProgressBar::operator++()
+util::ProgressBar& util::ProgressBar::operator++()
 {
     m_progress += m_incrementSize;
+
+    return *this;
+}
+
+util::ProgressBar util::ProgressBar::operator++(
+        __attribute__((unused)) int dummy)
+{
+    util::ProgressBar old = *this;
+    m_progress += m_incrementSize;
+
+    return old;
 }
 

@@ -40,3 +40,4 @@ dmvr
 my_session.vim
 .gdb_history
 ignored/*
+tmp/*

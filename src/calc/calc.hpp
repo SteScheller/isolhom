@@ -17,7 +17,7 @@ namespace calc
      *                      considered for the calculation of skew and curtosis
      */
     template<typename T>
-    std::vector<std::array<float, 2>> calcLHOM(
+    std::vector<std::array<double, 2>> calcLHOM(
         T* volumeData,
         std::array<size_t, 3> volumeDim,
         std::array<size_t, 3> windowDim);

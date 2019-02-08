@@ -10,6 +10,9 @@
 #include <boost/program_options.hpp>
 namespace po = boost::program_options;
 
+#include <boost/filesystem.hpp>
+namespace fs = boost::filesystem;
+
 #include <gnuplot-iostream.h>
 
 #include "configraw/configraw.hpp"
@@ -21,6 +24,10 @@ namespace po = boost::program_options;
 //-----------------------------------------------------------------------------
 cr::VolumeConfig applyProgramOptions(
         int argc, char *argv[], std::string& output);
+void writeToCsv(
+        std::string const &path,
+        std::vector<std::array<double, 2>> lhoms,
+        unsigned_byte_t* volumeData);
 
 //-----------------------------------------------------------------------------
 // function implementations
@@ -34,12 +41,41 @@ int main(int argc, char *argv[])
     cr::VolumeConfig volumeConfig = applyProgramOptions(argc, argv, output);
 
     // check loaded volume
-    std::cout << "Volume state: " << (volumeConfig.isValid() ? "valid" : "not valid")
-        << std::endl;
-    std::cout << "Number of timesteps: " << volumeConfig.getNumTimesteps() <<
-        std::endl;
     if (!volumeConfig.isValid())
+    {
+        std::cout << "Error: loaded volume not valid" << std::endl;
         return EXIT_FAILURE;
+    }
+
+    // check existence of output directory and create it if it does not exist
+    fs::path outDir;
+    if (output != "")
+    {
+        outDir = fs::path(output);
+        if (fs::exists(outDir))
+        {
+            if (!fs::is_directory(outDir))
+            {
+                std::cout << "Error: " << outDir
+                    << " exists but is not a directory!" << std::endl;
+                return EXIT_FAILURE;
+            }
+        }
+        else
+        {
+            try
+            {
+                fs::create_directories(outDir);
+            }
+            catch(fs::filesystem_error &e)
+            {
+                std::cout << "Error: "
+                    << " failed to create output directory!" << std::endl;
+                std::cout << e.what() << std::endl;
+                return EXIT_FAILURE;
+            }
+        }
+    }
 
     // calculate skew and kurtosis
     std::cout << "Calculating LHOMs" << std::endl;
@@ -47,26 +83,36 @@ int main(int argc, char *argv[])
     for (size_t i = 0; i < volumeConfig.getNumTimesteps(); ++i)
     {
         progbar.print();
+        std::cout.flush();
 
         // load data of current timestep
         std::unique_ptr<cr::VolumeDataBase> volumeData;
         volumeData = cr::loadScalarVolumeTimestep(volumeConfig, i, false);
 
         // calculate stuff
-        std::vector<std::array<float, 2>> lhoms;
+        std::vector<std::array<double, 2>> lhoms;
         lhoms = calc::calcLHOM<unsigned_byte_t>(
             reinterpret_cast<unsigned_byte_t*>(volumeData->getRawData()),
             volumeConfig.getVolumeDim(),
             {5, 5, 5});
 
-        // TODO: write stuff to csv or something similar
+        // write stuff to csv
+        if (output != "")
+        {
+            fs::path outFile(outDir / fs::path(
+                std::string(
+                    fs::path(volumeConfig.getTimestepFile(i)).stem().c_str()) +
+                std::string(".csv")));
+            writeToCsv(
+                outFile.c_str(),
+                lhoms,
+                reinterpret_cast<unsigned_byte_t*>(volumeData->getRawData()));
+        }
 
         ++progbar;
     }
     ++progbar;
     progbar.print();
-
-    std::cout << output << std::endl;
 
     return EXIT_SUCCESS;
 }
@@ -119,7 +165,13 @@ cr::VolumeConfig applyProgramOptions(
 
         if (vm.count("help"))
         {
+            std::cout <<
+                "Usage: isolhom [options] INPUT-FILE OUTPUT-DIR \n" <<
+                std::endl;
+            std::cout << hidden << std::endl;
             std::cout << visible << std::endl;
+            exit(EXIT_FAILURE);
+std::cout << visible << std::endl;
             exit(EXIT_SUCCESS);
         }
         if (vm.count("input-file") != 1)
@@ -133,13 +185,11 @@ cr::VolumeConfig applyProgramOptions(
         }
         if (vm.count("output-directory") != 1)
         {
-            std::cout << "No output-directory given!\n" << std::endl;
-            std::cout <<
-                "Usage: isolhom [options] INPUT-FILE OUTPUT-DIR \n" <<
-                std::endl;
-            std::cout << visible << std::endl;
-            exit(EXIT_FAILURE);
+            std::cout << "No output-directory given. " <<
+                "Results will not be stored on disk!\n" << std::endl;
         }
+        else
+            output = vm["output-directory"].as<std::string>();
 
         po::notify(vm);
 
@@ -150,7 +200,29 @@ cr::VolumeConfig applyProgramOptions(
         exit(EXIT_FAILURE);
     }
 
-    output = vm["output-directory"].as<std::string>();
     return cr::VolumeConfig((vm["input-file"].as<std::string>()));
+}
+
+/**
+ * \brief write results of LHOM calculation to csv file
+ *
+ */
+void writeToCsv(
+        std::string const &path,
+        std::vector<std::array<double, 2>> lhoms,
+        unsigned_byte_t* volumeData)
+{
+    std::ofstream out(path);
+
+    out << "x,skew,kurtosis" << std::endl;
+    auto it = lhoms.cbegin();
+    for(size_t i = 0; i != lhoms.size(); ++i)
+    {
+        out << std::to_string(volumeData[i]) << ","
+            << (*it)[0] << ","
+            << (*it)[1] << std::endl;
+        ++it;
+    }
+    out.close();
 }
 
