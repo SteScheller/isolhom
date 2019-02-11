@@ -23,7 +23,7 @@ namespace fs = boost::filesystem;
 // function prototypes
 //-----------------------------------------------------------------------------
 cr::VolumeConfig applyProgramOptions(
-        int argc, char *argv[], std::string& output);
+        int argc, char *argv[], std::string& output, bool& imageOutput);
 void writeToCsv(
         std::string const &path,
         std::vector<std::array<double, 2>> lhoms,
@@ -38,7 +38,10 @@ void writeToCsv(
 int main(int argc, char *argv[])
 {
     std::string output("");
-    cr::VolumeConfig volumeConfig = applyProgramOptions(argc, argv, output);
+    bool imageOutput = false;
+
+    cr::VolumeConfig volumeConfig = applyProgramOptions(
+            argc, argv, output, imageOutput);
 
     // check loaded volume
     if (!volumeConfig.isValid())
@@ -89,24 +92,34 @@ int main(int argc, char *argv[])
         std::unique_ptr<cr::VolumeDataBase> volumeData;
         volumeData = cr::loadScalarVolumeTimestep(volumeConfig, i, false);
 
-        // calculate stuff
+        // calculate local higher order moments
         std::vector<std::array<double, 2>> lhoms;
         lhoms = calc::calcLHOM<unsigned_byte_t>(
             reinterpret_cast<unsigned_byte_t*>(volumeData->getRawData()),
             volumeConfig.getVolumeDim(),
             {5, 5, 5});
 
-        // write stuff to csv
+        // write image or csv output
         if (output != "")
         {
-            fs::path outFile(outDir / fs::path(
-                std::string(
-                    fs::path(volumeConfig.getTimestepFile(i)).stem().c_str()) +
-                std::string(".csv")));
-            writeToCsv(
-                outFile.c_str(),
-                lhoms,
-                reinterpret_cast<unsigned_byte_t*>(volumeData->getRawData()));
+            if (!imageOutput)
+            {
+                fs::path outFile(outDir / fs::path(
+                    std::string(
+                        fs::path(volumeConfig.getTimestepFile(i)
+                            ).stem().c_str()) +
+                    std::string(".csv")));
+                writeToCsv(
+                    outFile.c_str(),
+                    lhoms,
+                    reinterpret_cast<unsigned_byte_t*>(
+                        volumeData->getRawData()));
+            }
+            else
+            {
+                // TODO: Output the calculated lhoms as images
+                std::cout << "Writing image..." << std::endl;
+            }
         }
 
         ++progbar;
@@ -127,12 +140,14 @@ int main(int argc, char *argv[])
  * \return  a data object constructed from the input arguments
  */
 cr::VolumeConfig applyProgramOptions(
-        int argc, char *argv[], std::string& output)
+        int argc, char *argv[], std::string& output, bool& imageOutput)
 {
     // Declare the supporded options
     po::options_description generic("Generic options");
     generic.add_options()
         ("help,h", "produce help message")
+        ("image,i", "output images of the skew and kurtosis vs. data values "
+                    "plots instead of csv files")
     ;
 
     po::options_description hidden("Hidden options");
@@ -190,6 +205,10 @@ std::cout << visible << std::endl;
         }
         else
             output = vm["output-directory"].as<std::string>();
+        if (vm.count("image"))
+            imageOutput = true;
+        else
+            imageOutput = false;
 
         po::notify(vm);
 
