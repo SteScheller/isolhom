@@ -31,11 +31,11 @@ int3 offsetVolumeCoordinate(int3 coord, int3 offset, dim3 volumeDim)
 }
 
 // kernel for calculating the local skew and kurtosis within the volume
-template<typename T>
+template<typename dataT, typename returnT>
 __global__
 void lhom(
-        double* results,
-        T* volumeData,
+        returnT* results,
+        dataT* volumeData,
         dim3 volumeDim,
         dim3 windowDim)
 {
@@ -93,8 +93,8 @@ void lhom(
     }
 
     // calculate skew and kurtosis and store them
-    double skew = m3 / pow(m2, 1.5);
-    double kurtosis = (m4 - 3.0 * pow(m2, 2.0)) / pow(m2, 2.0);
+    returnT skew = m3 / pow(m2, 1.5);
+    returnT kurtosis = (m4 - 3.0 * pow(m2, 2.0)) / pow(m2, 2.0);
     results[centerIdx << 1] = skew;
     results[(centerIdx << 1) + 1] = kurtosis;
 }
@@ -103,19 +103,19 @@ void lhom(
 //-----------------------------------------------------------------------------
 // Host wrapper functions
 //-----------------------------------------------------------------------------
-template<typename T>
-std::vector<std::array<double, 2>> calc::calcLHOM(
-    T* volumeData,
+template<typename dataT, typename returnT>
+std::vector<std::array<returnT, 2>> calc::calcLHOM(
+    dataT* volumeData,
     std::array<size_t, 3> volumeDim,
     std::array<size_t, 3> windowDim)
 {
     size_t n = volumeDim[0] * volumeDim[1] * volumeDim[2];
-    std::vector<std::array<double, 2>> results(n, {0.0, -2.0});
+    std::vector<std::array<returnT, 2>> results(n, {0.0, -2.0});
 
-    size_t resultDevMemSize = n * 2 * sizeof(double);
-    double* resultDevMem = nullptr;
-    size_t volumeDevMemSize = n * sizeof(T);
-    T* volumeDevMem = nullptr;
+    size_t resultDevMemSize = n * 2 * sizeof(returnT);
+    returnT* resultDevMem = nullptr;
+    size_t volumeDevMemSize = n * sizeof(dataT);
+    dataT* volumeDevMem = nullptr;
 
     cudaMalloc(&volumeDevMem, volumeDevMemSize);
     cudaMalloc(&resultDevMem, resultDevMemSize);
@@ -139,7 +139,7 @@ std::vector<std::array<double, 2>> calc::calcLHOM(
             std::ceil(static_cast<double>(volumeDim[2]) /
                 static_cast<double>(numThreads.z)));
 
-    lhom<T><<<numBlocks, numThreads>>>(
+    lhom<dataT, returnT><<<numBlocks, numThreads>>>(
             resultDevMem,
             volumeDevMem,
             {   static_cast<unsigned int>(volumeDim[0]),
@@ -165,7 +165,7 @@ std::vector<std::array<double, 2>> calc::calcLHOM(
 //-----------------------------------------------------------------------------
 // Instantiations of templated functions
 //-----------------------------------------------------------------------------
-template std::vector<std::array<double, 2>> calc::calcLHOM<uint8_t>(
+template std::vector<std::array<double, 2>> calc::calcLHOM<uint8_t, double>(
     uint8_t *volumeData,
     std::array<size_t, 3> volumeDim,
     std::array<size_t, 3> windowDim);

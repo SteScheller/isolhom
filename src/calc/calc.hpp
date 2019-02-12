@@ -17,9 +17,9 @@ namespace calc
      * \param windowDim     three dimensional extents of the local window
      *                      considered for the calculation of skew and curtosis
      */
-    template<typename T>
-    std::vector<std::array<double, 2>> calcLHOM(
-        T* volumeData,
+    template<typename dataT, typename returnT>
+    std::vector<std::array<returnT, 2>> calcLHOM(
+        dataT* volumeData,
         std::array<size_t, 3> volumeDim,
         std::array<size_t, 3> windowDim);
 
@@ -28,43 +28,40 @@ namespace calc
      *
      * \param data      pointer to vector of pairs containing the x and y
      *                  coordinates of the data points
-     * \param binSize   pair containing the binSize in x and y direction
-     * \param limits    pair of pairs containing the limits x and y dimension,
+     * \param numBins   pair containing the number of bins in x and y direction
+     * \param limits    pair of arrays containing the limits x and y dimension,
      *                  values outside of this range are discarded
      *
      * \return a two dimensional container whose elements contain the number
      * of data points that fall into the the according bin
      */
-    template<typename T>
-    void binning2D(
-        std::vector<std::pair<T, T>> const & data,
-        std::pair<T, T> binSize,
-        std::pair<std::pair<T, T>, std::pair<T, T>> limits)
+    template<typename T1, typename T2>
+    std::vector<std::vector<size_t>> binning2D(
+        std::vector<std::pair<T1, T2>> const & data,
+        std::array<size_t, 2> numBins,
+        std::pair<std::array<T1, 2>, std::array<T2, 2>> limits)
     {
         // initialize bins
 
         // TODO: print limits to check if indexing is correct
-        std::cout << "X limits: " << limits[0][0] << ", " << limits[0][1] << std::endl;
-        std::cout << "Y limits: " << limits[1][0] << ", " << limits[1][1] << std::endl;
+        std::cout << "X limits: " << limits.first[0] << ", " << limits.first[1] << std::endl;
+        std::cout << "Y limits: " << limits.second[0] << ", " << limits.second[1] << std::endl;
 
         // iterate over values and count them in bins
-        std::pair<T, T> item = { static_cast<T>(0), static_cast<T>(0) };
-        size_t xBinNumber = 0, yBinNumber = 0;
+        std::pair<T1, T2> item = { static_cast<T1>(0), static_cast<T2>(0) };
         for (auto it = data.cbegin(); it != data.cend(); ++it)
         {
             item = *it;
-            if (    (item[0] < limits[0][0]) ||
-                    (item[0] > limits[0][1]) ||
-                    (item[1] < limits[1][0]) ||
-                    (item[1] > limits[1][1])    )
+            if (    (item.first < limits.first[0]) ||
+                    (item.first > limits.first[1]) ||
+                    (item.second < limits.second[0]) ||
+                    (item.second > limits.second[1])    )
             {
                 // item is outside of the given spatial limits
                 continue;
             }
 
             // TODO
-            xBinNumber = std::floor(item[0] / binSize[0]);
-            xBinNumber = std::floor(item[1] / binSize[1]);
 
         }
     }

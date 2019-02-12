@@ -20,14 +20,24 @@ namespace fs = boost::filesystem;
 #include "progbar/progbar.hpp"
 
 //-----------------------------------------------------------------------------
+// type definitions
+//-----------------------------------------------------------------------------
+using lhom_t = double;
+using volume_t = unsigned_byte_t;
+
+//-----------------------------------------------------------------------------
 // function prototypes
 //-----------------------------------------------------------------------------
 cr::VolumeConfig applyProgramOptions(
         int argc, char *argv[], std::string& output, bool& imageOutput);
 void writeToCsv(
         std::string const &path,
-        std::vector<std::array<double, 2>> lhoms,
-        unsigned_byte_t* volumeData);
+        std::vector<std::array<lhom_t, 2>> lhoms,
+        volume_t* volumeData);
+void writeToPng(
+        std::string const &outBasename,
+        std::vector<std::array<lhom_t, 2>> lhoms,
+        volume_t* volumeData);
 
 //-----------------------------------------------------------------------------
 // function implementations
@@ -93,8 +103,8 @@ int main(int argc, char *argv[])
         volumeData = cr::loadScalarVolumeTimestep(volumeConfig, i, false);
 
         // calculate local higher order moments
-        std::vector<std::array<double, 2>> lhoms;
-        lhoms = calc::calcLHOM<unsigned_byte_t>(
+        std::vector<std::array<lhom_t, 2>> lhoms;
+        lhoms = calc::calcLHOM<volume_t, lhom_t>(
             reinterpret_cast<unsigned_byte_t*>(volumeData->getRawData()),
             volumeConfig.getVolumeDim(),
             {5, 5, 5});
@@ -118,7 +128,8 @@ int main(int argc, char *argv[])
             else
             {
                 // TODO: Output the calculated lhoms as images
-                std::cout << "Writing image..." << std::endl;
+
+
             }
         }
 
@@ -181,7 +192,7 @@ cr::VolumeConfig applyProgramOptions(
         if (vm.count("help"))
         {
             std::cout <<
-                "Usage: isolhom [options] INPUT-FILE OUTPUT-DIR \n" <<
+                "Usage: isolhom [options] INPUT-FILE [OUTPUT-DIR] \n" <<
                 std::endl;
             std::cout << hidden << std::endl;
             std::cout << visible << std::endl;
@@ -193,7 +204,7 @@ std::cout << visible << std::endl;
         {
             std::cout << "No input-file given!\n" << std::endl;
             std::cout <<
-                "Usage: isolhom [options] INPUT-FILE OUTPUT-DIR \n" <<
+                "Usage: isolhom [options] INPUT-FILE [OUTPUT-DIR] \n" <<
                 std::endl;
             std::cout << visible << std::endl;
             exit(EXIT_FAILURE);
@@ -228,20 +239,45 @@ std::cout << visible << std::endl;
  */
 void writeToCsv(
         std::string const &path,
-        std::vector<std::array<double, 2>> lhoms,
-        unsigned_byte_t* volumeData)
+        std::vector<std::array<lhom_t, 2>> lhoms,
+        volume_t* volumeData)
 {
     std::ofstream out(path);
 
     out << "x,skew,kurtosis" << std::endl;
-    auto it = lhoms.cbegin();
-    for(size_t i = 0; i != lhoms.size(); ++i)
+    for(size_t i = 0; i < lhoms.size(); ++i)
     {
         out << std::to_string(volumeData[i]) << ","
-            << (*it)[0] << ","
-            << (*it)[1] << std::endl;
-        ++it;
+            << lhoms[i][0] << ","
+            << lhoms[i][1] << std::endl;
     }
     out.close();
 }
 
+void writeToPng(
+        std::string const &outBasename,
+        std::vector<std::array<lhom_t, 2>> lhoms,
+        volume_t* volumeData)
+{
+    std::vector<std::pair<volume_t, lhom_t>> skew(
+            lhoms.size(), {0, 0.0});
+    std::vector<std::pair<volume_t, lhom_t>> kurtosis(
+            lhoms.size(), {0, 0.0});
+    std::pair<lhom_t, lhom_t> skewLimits = {0.0, 0.0};
+    std::pair<lhom_t, lhom_t> kurtosisLimits = {0.0, 0.0};
+    for(size_t i = 0; i < lhoms.size(); ++i)
+    {
+        skew[i].first = volumeData[i];
+        skew[i].second = lhoms[i][0];
+        kurtosis[i].first = volumeData[i];
+        kurtosis[i].second = lhoms[i][1];
+    }
+
+    std::vector<std::vector<size_t>> skewBins = calc::binning2D(
+        skew,
+        {256, 256},
+        {{0, 255}, {}});
+
+    fs::path outSkew(outBasename + std::string("_skew.png"));
+    fs::path outKurtosis(outBasename + std::string("_kurtosis.png"));
+}
