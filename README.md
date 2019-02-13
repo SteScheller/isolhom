@@ -12,6 +12,7 @@ given volume (json+raw format).
 ## Included Libraries
 - <https://github.com/nlohmann/json>
 - <https://github.com/dstahlke/gnuplot-iostream>
+- <https://github.com/dtschump/CImg>
 
 ## Other Dependencies
 - Boost (tested with 1.64.0)

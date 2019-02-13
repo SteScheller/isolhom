@@ -11,7 +11,7 @@ SOURCES += src/progbar/progbar.hpp
 OBJS = $(addsuffix .o, $(basename $(SOURCES)))
 
 INCLUDE = -I./src -I./src/configraw
-INCLUDE += -I./include -I./lib/gnuplot-iostream -I./lib/nlohmann
+INCLUDE += -I./include -I./lib/gnuplot-iostream -I./lib/nlohmann -I./lib/CImg
 INCLUDE += -I/usr/local/cuda/include
 LDINCLUDE = -L/usr/local/cuda/lib64
 
@@ -35,6 +35,8 @@ DEBUG_CUDACFLAGS = -DDEBUG -g
 RELEASE_CUDACFLAGS = -DRELEASE -O3
 
 LDFLAGS = $(LDINCLUDE) -fopenmp
+LDFLAGS += -lX11
+# LDFLAGS += -lm -lpthread -lX11
 LDFLAGS += -lcuda -lcudart
 LDFLAGS += -lboost_system -lboost_filesystem -lboost_regex
 LDFLAGS += -lboost_iostreams -lboost_program_options

@@ -5,7 +5,6 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 def plotSkewKurtosis(path):
-    fig = plt.figure()
     data = pd.read_csv(path)
     ax1 = data.plot(kind='scatter',x='x', y='skew')
     ax2 = data.plot(kind='scatter',x='x', y='kurtosis')

@@ -1,5 +1,6 @@
 #include <iostream>
 #include <cstdio>
+#include <cstdint>
 #include <string>
 #include <chrono>
 #include <thread>
@@ -13,11 +14,17 @@ namespace po = boost::program_options;
 #include <boost/filesystem.hpp>
 namespace fs = boost::filesystem;
 
+#include <boost/multi_array.hpp>
+
 #include <gnuplot-iostream.h>
+
+#include <CImg.h>
+namespace img = cimg_library;
 
 #include "configraw/configraw.hpp"
 #include "calc/calc.hpp"
 #include "progbar/progbar.hpp"
+#include "inferno.hpp"
 
 //-----------------------------------------------------------------------------
 // type definitions
@@ -29,15 +36,23 @@ using volume_t = unsigned_byte_t;
 // function prototypes
 //-----------------------------------------------------------------------------
 cr::VolumeConfig applyProgramOptions(
-        int argc, char *argv[], std::string& output, bool& imageOutput);
-void writeToCsv(
+        int argc,
+        char *argv[],
+        std::string& output,
+        bool& csvOutput,
+        bool& displayPlots,
+        std::vector<size_t>& imgSize);
+void writeSkewKurtosisToCsv(
         std::string const &path,
         std::vector<std::array<lhom_t, 2>> lhoms,
         volume_t* volumeData);
-void writeToPng(
+void plotSkewKurtosis(
         std::string const &outBasename,
         std::vector<std::array<lhom_t, 2>> lhoms,
-        volume_t* volumeData);
+        volume_t* volumeData,
+        std::array<volume_t, 2> volumeDataLimits,
+        std::array<size_t, 2> imgSize,
+        bool displayPlots);
 
 //-----------------------------------------------------------------------------
 // function implementations
@@ -48,10 +63,12 @@ void writeToPng(
 int main(int argc, char *argv[])
 {
     std::string output("");
-    bool imageOutput = false;
+    bool csvOutput = false;
+    bool displayPlots = false;
+    std::vector<size_t> imgSize(2,  256);
 
     cr::VolumeConfig volumeConfig = applyProgramOptions(
-            argc, argv, output, imageOutput);
+            argc, argv, output, csvOutput, displayPlots, imgSize);
 
     // check loaded volume
     if (!volumeConfig.isValid())
@@ -109,27 +126,43 @@ int main(int argc, char *argv[])
             volumeConfig.getVolumeDim(),
             {5, 5, 5});
 
-        // write image or csv output
-        if (output != "")
+        // create output
+        if (output == "")
         {
-            if (!imageOutput)
+            if (displayPlots)
+            {
+                plotSkewKurtosis(
+                    "",
+                    lhoms,
+                    reinterpret_cast<volume_t*>(volumeData->getRawData()),
+                    {0, 255},
+                    {imgSize[0], imgSize[1]},
+                    displayPlots);
+            }
+        }
+        else
+        {
+            fs::path outFile(
+                outDir / fs::path(volumeConfig.getTimestepFile(i)).stem());
+            plotSkewKurtosis(
+                outFile.c_str(),
+                lhoms,
+                reinterpret_cast<volume_t*>(volumeData->getRawData()),
+                {0, 255},
+                {imgSize[0], imgSize[1]},
+                displayPlots);
+
+            if (csvOutput)
             {
                 fs::path outFile(outDir / fs::path(
                     std::string(
                         fs::path(volumeConfig.getTimestepFile(i)
                             ).stem().c_str()) +
                     std::string(".csv")));
-                writeToCsv(
+                writeSkewKurtosisToCsv(
                     outFile.c_str(),
                     lhoms,
-                    reinterpret_cast<unsigned_byte_t*>(
-                        volumeData->getRawData()));
-            }
-            else
-            {
-                // TODO: Output the calculated lhoms as images
-
-
+                    reinterpret_cast<volume_t*>(volumeData->getRawData()));
             }
         }
 
@@ -144,23 +177,37 @@ int main(int argc, char *argv[])
 /**
  * \brief Takes in input arguments, parses and loads the specified data
  *
- * \param   argc number of input arguments
- * \param   argv array of char pointers to the input arguments
- * \param   path to directory where output shall be written to
+ * \param argc          number of input arguments
+ * \param argv          array of char pointers to the input arguments
+ * \param output        to directory where output shall be written to
+ * \param csvOuput      set true if csv files shall be written
+ * \param displayPlots  set true if the skew and kurtosis plots shall be
+ *                      shown in an interactive window
+ * \param imgSize       gets filled with the requested width and height
+ *                      (in pixel) for the skew and kurtosis plots
  *
  * \return  a data object constructed from the input arguments
  */
 cr::VolumeConfig applyProgramOptions(
-        int argc, char *argv[], std::string& output, bool& imageOutput)
+        int argc,
+        char *argv[],
+        std::string& output,
+        bool& csvOutput,
+        bool& displayPlots,
+        std::vector<size_t>& imgSize)
 {
     // Declare the supporded options
     po::options_description generic("Generic options");
     generic.add_options()
         ("help,h", "produce help message")
-        ("image,i", "output images of the skew and kurtosis vs. data values "
-                    "plots instead of csv files")
+        ("display,d", "show the the skew and kurtosis plots in an "
+                      "interactive window")
+        ("csv,c", "output csv files of the skew and kurtosis values")
+        ("img-size,i",
+         po::value<std::vector<size_t>>(&imgSize)->multitoken(),
+                       "dimensions of the created plot in pixel "
+                       "(default: 256x256)")
     ;
-
     po::options_description hidden("Hidden options");
     hidden.add_options()
         ("input-file",
@@ -196,8 +243,6 @@ cr::VolumeConfig applyProgramOptions(
                 std::endl;
             std::cout << hidden << std::endl;
             std::cout << visible << std::endl;
-            exit(EXIT_FAILURE);
-std::cout << visible << std::endl;
             exit(EXIT_SUCCESS);
         }
         if (vm.count("input-file") != 1)
@@ -216,10 +261,10 @@ std::cout << visible << std::endl;
         }
         else
             output = vm["output-directory"].as<std::string>();
-        if (vm.count("image"))
-            imageOutput = true;
-        else
-            imageOutput = false;
+        if (vm.count("display")) displayPlots = true;
+        else displayPlots = false;
+        if (vm.count("csv")) csvOutput = true;
+        else csvOutput = false;
 
         po::notify(vm);
 
@@ -235,9 +280,11 @@ std::cout << visible << std::endl;
 
 /**
  * \brief write results of LHOM calculation to csv file
- *
+ * \param path          filesystem path where csv shall be written to
+ * \param lhoms         the calculated local higher order statistical moments
+ * \param volumeData    pointer to the voxel data
  */
-void writeToCsv(
+void writeSkewKurtosisToCsv(
         std::string const &path,
         std::vector<std::array<lhom_t, 2>> lhoms,
         volume_t* volumeData)
@@ -254,30 +301,103 @@ void writeToCsv(
     out.close();
 }
 
-void writeToPng(
+/**
+ * \brief plots the local skew and kurtosis against the datavalue of the
+ *        center voxel
+ * \param outBasename   path and filename stem for created images (empty string
+ *                      if no output shall be written)
+ * \param lhoms         the calculated local higher order statistical moments
+ * \param volumeData    pointer to the voxel data
+ * \param imgSize       width and height of the plots in pixel
+ * \param displayPlots  true if the created plots shall be shown in an
+ *                      interactive window
+ */
+void plotSkewKurtosis(
         std::string const &outBasename,
         std::vector<std::array<lhom_t, 2>> lhoms,
-        volume_t* volumeData)
+        volume_t* volumeData,
+        std::array<volume_t, 2> volumeDataLimits,
+        std::array<size_t, 2> imgSize,
+        bool displayPlots)
 {
+    // prepare data for binning function
     std::vector<std::pair<volume_t, lhom_t>> skew(
             lhoms.size(), {0, 0.0});
     std::vector<std::pair<volume_t, lhom_t>> kurtosis(
             lhoms.size(), {0, 0.0});
-    std::pair<lhom_t, lhom_t> skewLimits = {0.0, 0.0};
-    std::pair<lhom_t, lhom_t> kurtosisLimits = {0.0, 0.0};
+    std::array<lhom_t, 2> skewLimits = {0.0, 0.0};
+    std::array<lhom_t, 2> kurtosisLimits = {0.0, 0.0};
     for(size_t i = 0; i < lhoms.size(); ++i)
     {
-        skew[i].first = volumeData[i];
-        skew[i].second = lhoms[i][0];
-        kurtosis[i].first = volumeData[i];
-        kurtosis[i].second = lhoms[i][1];
+        skew[i].first = volumeData[i]; skew[i].second = lhoms[i][0];
+        kurtosis[i].first = volumeData[i]; kurtosis[i].second = lhoms[i][1];
+
+        if(lhoms[i][0] < skewLimits[0]) skewLimits[0] = lhoms[i][0];
+        else if(lhoms[i][0] > skewLimits[1]) skewLimits[1] = lhoms[i][0];
+
+        if(lhoms[i][1] < kurtosisLimits[0]) kurtosisLimits[0] = lhoms[i][1];
+        else if(lhoms[i][1] > kurtosisLimits[1])
+            kurtosisLimits[1] = lhoms[i][1];
     }
 
-    std::vector<std::vector<size_t>> skewBins = calc::binning2D(
+    // make 2D histograms of the data
+    boost::multi_array<size_t, 2> skewBins = calc::binning2D(
         skew,
-        {256, 256},
-        {{0, 255}, {}});
+        imgSize,
+        {   {volumeDataLimits[0],volumeDataLimits[1]},
+            {skewLimits[0], skewLimits[1]}  });
+    boost::multi_array<size_t, 2> kurtosisBins = calc::binning2D(
+        kurtosis,
+        imgSize,
+        {   {volumeDataLimits[0],volumeDataLimits[1]},
+            {kurtosisLimits[0], kurtosisLimits[1]}  });
+    size_t skewBinMax = 0, kurtosisBinMax = 0;
+    for(size_t y = 0; y < imgSize[1]; ++y)
+    for(size_t x = 0; x < imgSize[0]; ++x)
+    {
+        if (skewBins[x][y] > skewBinMax) skewBinMax = skewBins[x][y];
+        if (kurtosisBins[x][y] > kurtosisBinMax)
+            kurtosisBinMax = skewBins[x][y];
+    }
 
-    fs::path outSkew(outBasename + std::string("_skew.png"));
-    fs::path outKurtosis(outBasename + std::string("_kurtosis.png"));
+    // transform the 2D histograms into normalized, colormapped images
+    img::CImg<size_t> skewImg(
+            skewBins.data(), imgSize[1], imgSize[0], 1, 1, false);
+    img::CImg<size_t> kurtosisImg(
+            kurtosisBins.data(), imgSize[1], imgSize[0], 1, 1, false);
+    static std::array<uint8_t, 256 * 3> infernoData;
+    static bool initialized = false;
+    if (!initialized)
+        for (size_t i = 0; i < 256; ++i)
+        {
+            infernoData[i] = INFERNO_UINT8_RGB_256[i * 3];
+            infernoData[i + 256] = INFERNO_UINT8_RGB_256[i * 3 + 1];
+            infernoData[i + 512] = INFERNO_UINT8_RGB_256[i * 3 + 2];
+        }
+    initialized = true;
+    static img::CImg<uint8_t> infernoMap(
+            infernoData.data(), 256, 1, 1, 3, true);
+    skewImg.rotate(-90.0);
+    skewImg = skewImg.get_log().cut(0, skewBinMax).normalize(
+            0, 255).map(infernoMap, 1);
+    kurtosisImg.rotate(-90.0);
+    kurtosisImg = kurtosisImg.get_log().cut(0, kurtosisBinMax).normalize(
+            0, 255).map(infernoMap, 1);
+    {
+        // draw zero line for skew plot
+        size_t yZero = -skewLimits[0] / (skewLimits[1] - skewLimits[0]) * 255;
+        const unsigned char lineColor[] = { 255, 0, 0 };
+        skewImg.draw_line(0, yZero, imgSize[0] - 1, yZero, lineColor);
+    }
+
+    // optionally show the plots and write the accordings images
+    if (displayPlots)
+        (skewImg, kurtosisImg).display();
+    if (outBasename != "")
+    {
+        skewImg.save_png((outBasename + std::string("_skew.png")).c_str());
+        kurtosisImg.save_png(
+            (outBasename + std::string("_kurtosis.png")).c_str());
+    }
 }
+
