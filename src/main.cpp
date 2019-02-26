@@ -7,6 +7,8 @@
 #include <vector>
 #include <array>
 #include <memory>
+#include <algorithm>
+#include <iterator>
 
 #include <boost/program_options.hpp>
 namespace po = boost::program_options;
@@ -35,9 +37,10 @@ using volume_t = unsigned_byte_t;
 //-----------------------------------------------------------------------------
 // function prototypes
 //-----------------------------------------------------------------------------
-cr::VolumeConfig applyProgramOptions(
+int applyProgramOptions(
         int argc,
         char *argv[],
+        std::string& input,
         std::string& output,
         bool& csvOutput,
         bool& displayPlots,
@@ -63,14 +66,28 @@ void plotSkewKurtosis(
  */
 int main(int argc, char *argv[])
 {
+    std::string input("");
     std::string output("");
     bool csvOutput = false;
     bool displayPlots = false;
     bool individual = false;
     std::vector<size_t> imgSize(2,  256);
 
-    cr::VolumeConfig volumeConfig = applyProgramOptions(
-            argc, argv, output, csvOutput, displayPlots, individual, imgSize);
+    if (EXIT_FAILURE == applyProgramOptions(
+            argc,
+            argv,
+            input,
+            output,
+            csvOutput,
+            displayPlots,
+            individual,
+            imgSize))
+    {
+        std::cout << "Error: could not parse program options" << std::endl;
+        return EXIT_FAILURE;
+    }
+
+    cr::VolumeConfig volumeConfig(input);
 
     // check loaded volume
     if (!volumeConfig.isValid())
@@ -109,10 +126,20 @@ int main(int argc, char *argv[])
         }
     }
 
+
+    // allocate storage for calculation results
+    std::array<size_t, 3> volumeDim = volumeConfig.getVolumeDim();
+    size_t numTimesteps = volumeConfig.getNumTimesteps();
+    size_t n = volumeDim[0] * volumeDim[1] * volumeDim[2];
+
+    std::vector<std::array<lhom_t, 2>> lhoms(n, { 0.0, 0.0 });
+    if (!individual)
+        lhoms.resize(numTimesteps * n, { 0.0, 0.0 });
+
     // calculate skew and kurtosis
     std::cout << "Calculating LHOMs" << std::endl;
-    util::ProgressBar progbar(50, volumeConfig.getNumTimesteps());
-    for (size_t i = 0; i < volumeConfig.getNumTimesteps(); ++i)
+    util::ProgressBar progbar(50, numTimesteps);
+    for (size_t i = 0; i < numTimesteps; ++i)
     {
         progbar.print();
         std::cout.flush();
@@ -122,23 +149,32 @@ int main(int argc, char *argv[])
         volumeData = cr::loadScalarVolumeTimestep(volumeConfig, i, false);
 
         // calculate local higher order moments
-        std::vector<std::array<lhom_t, 2>> lhoms;
-        lhoms = calc::calcLHOM<volume_t, lhom_t>(
+        std::vector<std::array<lhom_t, 2>> timestepLhoms;
+        timestepLhoms = calc::calcLHOM<volume_t, lhom_t>(
             reinterpret_cast<unsigned_byte_t*>(volumeData->getRawData()),
-            volumeConfig.getVolumeDim(),
+            volumeDim,
             {5, 5, 5});
 
         // handle superimposing all timesteps
         if (individual == false)
         {
-            // TODO: put lhoms into bins and add them up or save them
-            // in a growing vector an bin at the end
+            auto lhomIt = lhoms.begin();
+            std::advance(lhomIt, i * n);
+            std::copy(timestepLhoms.begin(), timestepLhoms.end(), lhomIt);
 
             // start loop from the beginning if we did not yet reach the
             // last timestep (otherwise continue below and generate output)
-            if (i < (volumeConfig.getNumTimesteps() - 1))
+            if (i < (numTimesteps - 1))
+            {
+                ++progbar;
                 continue;
+            }
         }
+        else
+            std::copy(
+                timestepLhoms.begin(),
+                timestepLhoms.end(),
+                lhoms.begin());
 
         // create output
         if (output == "")
@@ -156,8 +192,12 @@ int main(int argc, char *argv[])
         }
         else
         {
-            fs::path outFile(
-                outDir / fs::path(volumeConfig.getTimestepFile(i)).stem());
+            fs::path outFile(outDir);
+            if (individual)
+                outFile /= fs::path(volumeConfig.getTimestepFile(i)).stem();
+            else
+                outFile /= fs::path(input).stem();
+
             plotSkewKurtosis(
                 outFile.c_str(),
                 lhoms,
@@ -193,7 +233,8 @@ int main(int argc, char *argv[])
  *
  * \param argc          number of input arguments
  * \param argv          array of char pointers to the input arguments
- * \param output        to directory where output shall be written to
+ * \param input         path to the input file
+ * \param output        directory where output shall be written to
  * \param csvOuput      set true if csv files shall be written
  * \param displayPlots  set true if the skew and kurtosis plots shall be
  *                      shown in an interactive window
@@ -202,11 +243,13 @@ int main(int argc, char *argv[])
  * \param imgSize       gets filled with the requested width and height
  *                      (in pixel) for the skew and kurtosis plots
  *
- * \return  a data object constructed from the input arguments
+ * \return EXIT_SUCCESS or EXIT_FAILURE depending if propram options could
+ * be parsed successfully
  */
-cr::VolumeConfig applyProgramOptions(
+int applyProgramOptions(
         int argc,
         char *argv[],
+        std::string& input,
         std::string& output,
         bool& csvOutput,
         bool& displayPlots,
@@ -273,6 +316,8 @@ cr::VolumeConfig applyProgramOptions(
             std::cout << visible << std::endl;
             exit(EXIT_FAILURE);
         }
+        else
+            input = vm["input-file"].as<std::string>();
         if (vm.count("output-directory") != 1)
         {
             std::cout << "No output-directory given. " <<
@@ -293,10 +338,10 @@ cr::VolumeConfig applyProgramOptions(
     catch(std::exception &e)
     {
         std::cout << "Invalid program options!" << std::endl;
-        exit(EXIT_FAILURE);
+        return EXIT_FAILURE;
     }
 
-    return cr::VolumeConfig((vm["input-file"].as<std::string>()));
+    return EXIT_SUCCESS;
 }
 
 /**
