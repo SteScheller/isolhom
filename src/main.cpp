@@ -370,13 +370,15 @@ void writeSkewKurtosisToCsv(
 /**
  * \brief plots the local skew and kurtosis against the datavalue of the
  *        center voxel
- * \param outBasename   path and filename stem for created images (empty string
- *                      if no output shall be written)
- * \param lhoms         the calculated local higher order statistical moments
- * \param volumeData    pointer to the voxel data
- * \param imgSize       width and height of the plots in pixel
- * \param displayPlots  true if the created plots shall be shown in an
- *                      interactive window
+ * \param outBasename       path and filename stem for created images (empty
+ *                          string if no output shall be written)
+ * \param lhoms             the calculated local higher order statistical
+ *                          moments
+ * \param volumeData        pointer to the voxel data
+ * \param volumeDataLimits  min and max values of the volume data
+ * \param imgSize           width and height of the plots in pixel
+ * \param displayPlots      true if the created plots shall be shown in an
+ *                          interactive window
  */
 void plotSkewKurtosis(
         std::string const &outBasename,
@@ -386,37 +388,6 @@ void plotSkewKurtosis(
         std::array<size_t, 2> imgSize,
         bool displayPlots)
 {
-    // prepare data for binning function
-    std::vector<std::pair<volume_t, lhom_t>> skew(
-            lhoms.size(), {0, 0.0});
-    std::vector<std::pair<volume_t, lhom_t>> kurtosis(
-            lhoms.size(), {0, 0.0});
-    std::array<lhom_t, 2> skewLimits = {0.0, 0.0};
-    std::array<lhom_t, 2> kurtosisLimits = {0.0, 0.0};
-    for(size_t i = 0; i < lhoms.size(); ++i)
-    {
-        skew[i].first = volumeData[i]; skew[i].second = lhoms[i][0];
-        kurtosis[i].first = volumeData[i]; kurtosis[i].second = lhoms[i][1];
-
-        if(lhoms[i][0] < skewLimits[0]) skewLimits[0] = lhoms[i][0];
-        else if(lhoms[i][0] > skewLimits[1]) skewLimits[1] = lhoms[i][0];
-
-        if(lhoms[i][1] < kurtosisLimits[0]) kurtosisLimits[0] = lhoms[i][1];
-        else if(lhoms[i][1] > kurtosisLimits[1])
-            kurtosisLimits[1] = lhoms[i][1];
-    }
-
-    // make 2D histograms of the data
-    boost::multi_array<size_t, 2> skewBins = calc::binning2D(
-        skew,
-        imgSize,
-        {   {volumeDataLimits[0],volumeDataLimits[1]},
-            {skewLimits[0], skewLimits[1]}  });
-    boost::multi_array<size_t, 2> kurtosisBins = calc::binning2D(
-        kurtosis,
-        imgSize,
-        {   {volumeDataLimits[0],volumeDataLimits[1]},
-            {kurtosisLimits[0], kurtosisLimits[1]}  });
     size_t skewBinMax = 0, kurtosisBinMax = 0;
     for(size_t y = 0; y < imgSize[1]; ++y)
     for(size_t x = 0; x < imgSize[0]; ++x)
@@ -467,3 +438,47 @@ void plotSkewKurtosis(
     }
 }
 
+boost::multi_array<size_t, 2> binLhoms(
+
+        )
+{
+    // TODO:
+    // - adapt this cut out code
+    // - fix plotting function
+    // - fix csv function
+    // - adapt main to intermediate store the bin and add them up
+
+    // prepare data for binning function
+    std::vector<std::pair<volume_t, lhom_t>> skew(
+            lhoms.size(), {0, 0.0});
+    std::vector<std::pair<volume_t, lhom_t>> kurtosis(
+            lhoms.size(), {0, 0.0});
+    std::array<lhom_t, 2> skewLimits = {0.0, 0.0};
+    std::array<lhom_t, 2> kurtosisLimits = {0.0, 0.0};
+    for(size_t i = 0; i < lhoms.size(); ++i)
+    {
+        skew[i].first = volumeData[i]; skew[i].second = lhoms[i][0];
+        kurtosis[i].first = volumeData[i]; kurtosis[i].second = lhoms[i][1];
+
+        if(lhoms[i][0] < skewLimits[0]) skewLimits[0] = lhoms[i][0];
+        else if(lhoms[i][0] > skewLimits[1]) skewLimits[1] = lhoms[i][0];
+
+        if(lhoms[i][1] < kurtosisLimits[0]) kurtosisLimits[0] = lhoms[i][1];
+        else if(lhoms[i][1] > kurtosisLimits[1])
+            kurtosisLimits[1] = lhoms[i][1];
+    }
+
+    // make 2D histograms of the data
+    boost::multi_array<size_t, 2> skewBins = calc::binning2D(
+        skew,
+        imgSize,
+        {   {volumeDataLimits[0],volumeDataLimits[1]},
+            {skewLimits[0], skewLimits[1]}  });
+    boost::multi_array<size_t, 2> kurtosisBins = calc::binning2D(
+        kurtosis,
+        imgSize,
+        {   {volumeDataLimits[0],volumeDataLimits[1]},
+            {kurtosisLimits[0], kurtosisLimits[1]}  });
+
+
+}

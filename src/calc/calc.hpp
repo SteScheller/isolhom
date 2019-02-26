@@ -79,7 +79,6 @@ namespace calc
             if (idxX >= numBins[0]) idxX = numBins[0] - 1;
             if (idxY >= numBins[1]) idxY = numBins[1] - 1;
             ++(bins[idxX][idxY]);
-            //std::cout << idxX;
         }
 
         return bins;
