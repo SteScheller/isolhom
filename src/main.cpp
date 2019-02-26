@@ -41,6 +41,7 @@ cr::VolumeConfig applyProgramOptions(
         std::string& output,
         bool& csvOutput,
         bool& displayPlots,
+        bool& individual,
         std::vector<size_t>& imgSize);
 void writeSkewKurtosisToCsv(
         std::string const &path,
@@ -65,10 +66,11 @@ int main(int argc, char *argv[])
     std::string output("");
     bool csvOutput = false;
     bool displayPlots = false;
+    bool individual = false;
     std::vector<size_t> imgSize(2,  256);
 
     cr::VolumeConfig volumeConfig = applyProgramOptions(
-            argc, argv, output, csvOutput, displayPlots, imgSize);
+            argc, argv, output, csvOutput, displayPlots, individual, imgSize);
 
     // check loaded volume
     if (!volumeConfig.isValid())
@@ -125,6 +127,18 @@ int main(int argc, char *argv[])
             reinterpret_cast<unsigned_byte_t*>(volumeData->getRawData()),
             volumeConfig.getVolumeDim(),
             {5, 5, 5});
+
+        // handle superimposing all timesteps
+        if (individual == false)
+        {
+            // TODO: put lhoms into bins and add them up or save them
+            // in a growing vector an bin at the end
+
+            // start loop from the beginning if we did not yet reach the
+            // last timestep (otherwise continue below and generate output)
+            if (i < (volumeConfig.getNumTimesteps() - 1))
+                continue;
+        }
 
         // create output
         if (output == "")
@@ -183,6 +197,8 @@ int main(int argc, char *argv[])
  * \param csvOuput      set true if csv files shall be written
  * \param displayPlots  set true if the skew and kurtosis plots shall be
  *                      shown in an interactive window
+ * \param individual    set to true if output shall be computed for all
+ *                      individual timesteps
  * \param imgSize       gets filled with the requested width and height
  *                      (in pixel) for the skew and kurtosis plots
  *
@@ -194,6 +210,7 @@ cr::VolumeConfig applyProgramOptions(
         std::string& output,
         bool& csvOutput,
         bool& displayPlots,
+        bool& individual,
         std::vector<size_t>& imgSize)
 {
     // Declare the supporded options
@@ -202,6 +219,8 @@ cr::VolumeConfig applyProgramOptions(
         ("help,h", "produce help message")
         ("display,d", "show the the skew and kurtosis plots in an "
                       "interactive window")
+        ("timesteps,t", "compute ouput for individual timesteps instead of "
+                        "the whole timeseries")
         ("csv,c", "output csv files of the skew and kurtosis values")
         ("img-size,i",
          po::value<std::vector<size_t>>(&imgSize)->multitoken(),
@@ -265,6 +284,8 @@ cr::VolumeConfig applyProgramOptions(
         else displayPlots = false;
         if (vm.count("csv")) csvOutput = true;
         else csvOutput = false;
+        if (vm.count("timesteps")) individual = true;
+        else individual = false;
 
         po::notify(vm);
 
