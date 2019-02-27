@@ -52,12 +52,18 @@ void writeSkewKurtosisToCsv(
         volume_t* volumeData);
 void plotSkewKurtosis(
         std::string const &outBasename,
+        std::array<size_t, 2> imgSize,
+        boost::multi_array<size_t, 2> const &skewBins,
+        boost::multi_array<size_t, 2> const &kurtosisBins,
+        bool displayPlots,
+        std::array<lhom_t, 2> skewLimits);
+std::array<std::array<lhom_t, 2>, 2> binLhoms(
         std::vector<std::array<lhom_t, 2>> lhoms,
         volume_t* volumeData,
         std::array<volume_t, 2> volumeDataLimits,
-        std::array<size_t, 2> imgSize,
-        bool displayPlots);
-
+        std::array<size_t, 2> numBins,
+        boost::multi_array<size_t, 2> &skewBins,
+        boost::multi_array<size_t, 2> &kurtosisBins);
 //-----------------------------------------------------------------------------
 // function implementations
 //-----------------------------------------------------------------------------
@@ -128,13 +134,15 @@ int main(int argc, char *argv[])
 
 
     // allocate storage for calculation results
+    boost::multi_array<size_t, 2> skewBins(
+            boost::extents[imgSize[0]][imgSize[1]]);
+    boost::multi_array<size_t, 2> kurtosisBins(
+            boost::extents[imgSize[0]][imgSize[1]]);
+    std::fill_n(skewBins.data(), skewBins.num_elements(), 0);
+    std::fill_n(kurtosisBins.data(), kurtosisBins.num_elements(), 0);
+
     std::array<size_t, 3> volumeDim = volumeConfig.getVolumeDim();
     size_t numTimesteps = volumeConfig.getNumTimesteps();
-    size_t n = volumeDim[0] * volumeDim[1] * volumeDim[2];
-
-    std::vector<std::array<lhom_t, 2>> lhoms(n, { 0.0, 0.0 });
-    if (!individual)
-        lhoms.resize(numTimesteps * n, { 0.0, 0.0 });
 
     // calculate skew and kurtosis
     std::cout << "Calculating LHOMs" << std::endl;
@@ -148,19 +156,34 @@ int main(int argc, char *argv[])
         std::unique_ptr<cr::VolumeDataBase> volumeData;
         volumeData = cr::loadScalarVolumeTimestep(volumeConfig, i, false);
 
-        // calculate local higher order moments
-        std::vector<std::array<lhom_t, 2>> timestepLhoms;
-        timestepLhoms = calc::calcLHOM<volume_t, lhom_t>(
+        // calculate local higher order moments and put them into 2D histograms
+        std::vector<std::array<lhom_t, 2>> lhoms;
+        lhoms = calc::calcLHOM<volume_t, lhom_t>(
             reinterpret_cast<unsigned_byte_t*>(volumeData->getRawData()),
             volumeDim,
             {5, 5, 5});
+        boost::multi_array<size_t, 2> skewBinsTimestep(
+                boost::extents[imgSize[0]][imgSize[1]]);
+        boost::multi_array<size_t, 2> kurtosisBinsTimestep(
+                boost::extents[imgSize[0]][imgSize[1]]);
+
+        std::array<std::array<lhom_t, 2>, 2> lhomLimits = binLhoms(
+                lhoms,
+                reinterpret_cast<volume_t*>(volumeData->getRawData()),
+                { 0, 255 },
+                { imgSize[0], imgSize[1] },
+                skewBinsTimestep,
+                kurtosisBinsTimestep);
 
         // handle superimposing all timesteps
         if (individual == false)
         {
-            auto lhomIt = lhoms.begin();
-            std::advance(lhomIt, i * n);
-            std::copy(timestepLhoms.begin(), timestepLhoms.end(), lhomIt);
+            for (size_t idxY = 0; idxY < imgSize[1]; ++idxY)
+            for (size_t idxX = 0; idxX < imgSize[0]; ++idxX)
+            {
+                skewBins[idxX][idxY] += skewBinsTimestep[idxX][idxY];
+                kurtosisBins[idxX][idxY] += kurtosisBinsTimestep[idxX][idxY];
+            }
 
             // start loop from the beginning if we did not yet reach the
             // last timestep (otherwise continue below and generate output)
@@ -171,10 +194,14 @@ int main(int argc, char *argv[])
             }
         }
         else
-            std::copy(
-                timestepLhoms.begin(),
-                timestepLhoms.end(),
-                lhoms.begin());
+        {
+            for (size_t idxY = 0; idxY < imgSize[1]; ++idxY)
+            for (size_t idxX = 0; idxX < imgSize[0]; ++idxX)
+            {
+                skewBins[idxX][idxY] = skewBinsTimestep[idxX][idxY];
+                kurtosisBins[idxX][idxY] = kurtosisBinsTimestep[idxX][idxY];
+            }
+        }
 
         // create output
         if (output == "")
@@ -183,11 +210,11 @@ int main(int argc, char *argv[])
             {
                 plotSkewKurtosis(
                     "",
-                    lhoms,
-                    reinterpret_cast<volume_t*>(volumeData->getRawData()),
-                    {0, 255},
                     {imgSize[0], imgSize[1]},
-                    displayPlots);
+                    skewBins,
+                    kurtosisBins,
+                    displayPlots,
+                    lhomLimits[0]);
             }
         }
         else
@@ -200,13 +227,13 @@ int main(int argc, char *argv[])
 
             plotSkewKurtosis(
                 outFile.c_str(),
-                lhoms,
-                reinterpret_cast<volume_t*>(volumeData->getRawData()),
-                {0, 255},
                 {imgSize[0], imgSize[1]},
-                displayPlots);
+                skewBins,
+                kurtosisBins,
+                displayPlots,
+                lhomLimits[0]);
 
-            if (csvOutput)
+           if (csvOutput)
             {
                 fs::path outFile(outDir / fs::path(
                     std::string(
@@ -368,25 +395,25 @@ void writeSkewKurtosisToCsv(
 }
 
 /**
- * \brief plots the local skew and kurtosis against the datavalue of the
- *        center voxel
- * \param outBasename       path and filename stem for created images (empty
- *                          string if no output shall be written)
- * \param lhoms             the calculated local higher order statistical
- *                          moments
- * \param volumeData        pointer to the voxel data
- * \param volumeDataLimits  min and max values of the volume data
- * \param imgSize           width and height of the plots in pixel
- * \param displayPlots      true if the created plots shall be shown in an
- *                          interactive window
+ * \brief   plots the 2D histograms of local skew and kurtosis against the
+ *          datavalue of the center voxel
+ *
+ * \param outBasename   path and filename stem for created images (empty
+ *                      string if no output shall be written)
+ * \param imgSize       width and height of the plots in pixel
+ * \param skewBins      binned local skew data
+ * \param kurtosisBins  binnes local kurtosis data
+ * \param displayPlots  true if the created plots shall be shown in an
+ *                      interactive window
+ * \param skewLimits    highest and lowest skew value for drawing of zero level
  */
 void plotSkewKurtosis(
         std::string const &outBasename,
-        std::vector<std::array<lhom_t, 2>> lhoms,
-        volume_t* volumeData,
-        std::array<volume_t, 2> volumeDataLimits,
         std::array<size_t, 2> imgSize,
-        bool displayPlots)
+        boost::multi_array<size_t, 2> const &skewBins,
+        boost::multi_array<size_t, 2> const &kurtosisBins,
+        bool displayPlots,
+        std::array<lhom_t, 2> skewLimits)
 {
     size_t skewBinMax = 0, kurtosisBinMax = 0;
     for(size_t y = 0; y < imgSize[1]; ++y)
@@ -438,16 +465,28 @@ void plotSkewKurtosis(
     }
 }
 
-boost::multi_array<size_t, 2> binLhoms(
-
-        )
+/**
+ * \brief plots the local skew and kurtosis against the datavalue of the
+ *        center voxel
+ * \param lhoms             the calculated local higher order statistical
+ *                          moments
+ * \param volumeData        pointer to the voxel data
+ * \param volumeDataLimits  min and max values of the volume data
+ * \param numBins           number of bins along the dimensions 'voxel value'
+ *                          and skew/ kurtosis value
+ * \param skewBins          reference for returning skew histogram data
+ * \param kurtosisBins      reference for returning kurtosis histogram data
+ *
+ * \return min and max values of the local skew and kurtosis
+ */
+std::array<std::array<lhom_t, 2>, 2> binLhoms(
+        std::vector<std::array<lhom_t, 2>> lhoms,
+        volume_t* volumeData,
+        std::array<volume_t, 2> volumeDataLimits,
+        std::array<size_t, 2> numBins,
+        boost::multi_array<size_t, 2> &skewBins,
+        boost::multi_array<size_t, 2> &kurtosisBins)
 {
-    // TODO:
-    // - adapt this cut out code
-    // - fix plotting function
-    // - fix csv function
-    // - adapt main to intermediate store the bin and add them up
-
     // prepare data for binning function
     std::vector<std::pair<volume_t, lhom_t>> skew(
             lhoms.size(), {0, 0.0});
@@ -469,16 +508,17 @@ boost::multi_array<size_t, 2> binLhoms(
     }
 
     // make 2D histograms of the data
-    boost::multi_array<size_t, 2> skewBins = calc::binning2D(
+    skewBins = calc::binning2D(
         skew,
-        imgSize,
+        numBins,
         {   {volumeDataLimits[0],volumeDataLimits[1]},
             {skewLimits[0], skewLimits[1]}  });
-    boost::multi_array<size_t, 2> kurtosisBins = calc::binning2D(
+    kurtosisBins = calc::binning2D(
         kurtosis,
-        imgSize,
+        numBins,
         {   {volumeDataLimits[0],volumeDataLimits[1]},
             {kurtosisLimits[0], kurtosisLimits[1]}  });
 
-
+    return { skewLimits, kurtosisLimits };
 }
+
