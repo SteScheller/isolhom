@@ -283,7 +283,7 @@ int applyProgramOptions(
         bool& individual,
         std::vector<size_t>& imgSize)
 {
-    // Declare the supporded options
+    // Declare the supported options
     po::options_description generic("Generic options");
     generic.add_options()
         ("help,h", "produce help message")
