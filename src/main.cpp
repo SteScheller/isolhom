@@ -450,7 +450,7 @@ void plotSkewKurtosis(
     {
         // draw zero line for skew plot
         size_t yZero = -skewLimits[0] / (skewLimits[1] - skewLimits[0]) * 255;
-        const unsigned char lineColor[] = { 255, 0, 0 };
+        const unsigned char lineColor[] = { 255, 255, 255 };
         skewImg.draw_line(0, yZero, imgSize[0] - 1, yZero, lineColor);
     }
 
