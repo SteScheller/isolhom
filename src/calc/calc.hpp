@@ -3,6 +3,7 @@
 #include <vector>
 #include <array>
 #include <iostream>
+#include <algorithm>
 
 #include <boost/multi_array.hpp>
 
@@ -45,6 +46,7 @@ namespace calc
     {
         boost::multi_array<size_t, 2> bins(
                 boost::extents[numBins[0]][numBins[1]]);
+        std::fill_n(bins.data(), bins.num_elements(), 0);
 
         // iterate over values and count them in bins
         std::pair<T1, T2> item = { static_cast<T1>(0), static_cast<T2>(0) };
