@@ -161,7 +161,7 @@ int main(int argc, char *argv[])
         lhoms = calc::calcLHOM<volume_t, lhom_t>(
             reinterpret_cast<unsigned_byte_t*>(volumeData->getRawData()),
             volumeDim,
-            {5, 5, 5});
+            {3, 3, 3});
         boost::multi_array<size_t, 2> skewBinsTimestep(
                 boost::extents[imgSize[0]][imgSize[1]]);
         boost::multi_array<size_t, 2> kurtosisBinsTimestep(
