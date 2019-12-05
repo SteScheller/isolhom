@@ -13,7 +13,7 @@ OBJS = $(addsuffix .o, $(basename $(SOURCES)))
 INCLUDE = -I./src -I./src/configraw
 INCLUDE += -I./include -I./lib/gnuplot-iostream -I./lib/nlohmann -I./lib/CImg
 INCLUDE += -I/usr/local/cuda/include
-LDINCLUDE = -L/usr/local/cuda/lib64
+LDINCLUDE = -L/opt/cuda/targets/x86_64-linux/lib
 
 CC = cc
 CXX = g++
