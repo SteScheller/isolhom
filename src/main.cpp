@@ -179,64 +179,66 @@ int main(int argc, char *argv[])
                 kurtosisBinsTimestep);
 
         // handle superimposing all timesteps
-        if (individual == false)
-        {
-            for (size_t idxY = 0; idxY < imgSize[1]; ++idxY)
+        for (size_t idxY = 0; idxY < imgSize[1]; ++idxY)
             for (size_t idxX = 0; idxX < imgSize[0]; ++idxX)
             {
                 skewBins[idxX][idxY] += skewBinsTimestep[idxX][idxY];
                 kurtosisBins[idxX][idxY] += kurtosisBinsTimestep[idxX][idxY];
             }
 
-            // start loop from the beginning if we did not yet reach the
-            // last timestep (otherwise continue below and generate output)
-            if (i < (numTimesteps - 1))
-            {
-                ++progbar;
-                continue;
-            }
-        }
-        else
-        {
-            for (size_t idxY = 0; idxY < imgSize[1]; ++idxY)
-            for (size_t idxX = 0; idxX < imgSize[0]; ++idxX)
-            {
-                skewBins[idxX][idxY] = skewBinsTimestep[idxX][idxY];
-                kurtosisBins[idxX][idxY] = kurtosisBinsTimestep[idxX][idxY];
-            }
-        }
-
         // create output
         if (output == "")
         {
             if (displayPlots)
             {
+                if (individual == true)
+                    plotSkewKurtosis(
+                        "",
+                        {imgSize[0], imgSize[1]},
+                        skewBinsTimestep,
+                        kurtosisBinsTimestep,
+                        displayPlots,
+                        lhomLimits[0]);
+                else
+                    plotSkewKurtosis(
+                        "",
+                        {imgSize[0], imgSize[1]},
+                        skewBins,
+                        kurtosisBins,
+                        displayPlots,
+                        lhomLimits[0]);
+            }
+        }
+        else
+        {
+            if (individual)
+            {
+                fs::path outFile(outDir);
+                outFile /= fs::path(volumeConfig.getTimestepFile(i)).stem();
                 plotSkewKurtosis(
-                    "",
+                    outFile.c_str(),
+                    {imgSize[0], imgSize[1]},
+                    skewBinsTimestep,
+                    kurtosisBinsTimestep,
+                    displayPlots,
+                    lhomLimits[0]);
+            }
+
+            // plot superimposed bins
+            if (i == (numTimesteps - 1))
+            {
+                fs::path outFile(outDir);
+                outFile /= fs::path(input).stem();
+                plotSkewKurtosis(
+                    outFile.c_str(),
                     {imgSize[0], imgSize[1]},
                     skewBins,
                     kurtosisBins,
                     displayPlots,
                     lhomLimits[0]);
             }
-        }
-        else
-        {
-            fs::path outFile(outDir);
-            if (individual)
-                outFile /= fs::path(volumeConfig.getTimestepFile(i)).stem();
-            else
-                outFile /= fs::path(input).stem();
 
-            plotSkewKurtosis(
-                outFile.c_str(),
-                {imgSize[0], imgSize[1]},
-                skewBins,
-                kurtosisBins,
-                displayPlots,
-                lhomLimits[0]);
-
-           if (csvOutput)
+            if (csvOutput)
             {
                 fs::path outFile(outDir / fs::path(
                     std::string(
