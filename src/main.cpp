@@ -45,6 +45,7 @@ int applyProgramOptions(
         bool& csvOutput,
         bool& displayPlots,
         bool& individual,
+        size_t& windowSize,
         std::vector<size_t>& imgSize);
 void writeSkewKurtosisToCsv(
         std::string const &path,
@@ -78,6 +79,7 @@ int main(int argc, char *argv[])
     bool displayPlots = false;
     bool individual = false;
     std::vector<size_t> imgSize(2,  256);
+    size_t windowSize = 3;
 
     if (EXIT_FAILURE == applyProgramOptions(
             argc,
@@ -87,6 +89,7 @@ int main(int argc, char *argv[])
             csvOutput,
             displayPlots,
             individual,
+            windowSize,
             imgSize))
     {
         std::cout << "Error: could not parse program options" << std::endl;
@@ -161,7 +164,7 @@ int main(int argc, char *argv[])
         lhoms = calc::calcLHOM<volume_t, lhom_t>(
             reinterpret_cast<unsigned_byte_t*>(volumeData->getRawData()),
             volumeDim,
-            {3, 3, 3});
+            {windowSize, windowSize, windowSize});
         boost::multi_array<size_t, 2> skewBinsTimestep(
                 boost::extents[imgSize[0]][imgSize[1]]);
         boost::multi_array<size_t, 2> kurtosisBinsTimestep(
@@ -281,6 +284,7 @@ int applyProgramOptions(
         bool& csvOutput,
         bool& displayPlots,
         bool& individual,
+        size_t& windowSize,
         std::vector<size_t>& imgSize)
 {
     // Declare the supported options
@@ -296,7 +300,12 @@ int applyProgramOptions(
          po::value<std::vector<size_t>>(&imgSize)->multitoken(),
                        "dimensions of the created plot in pixel "
                        "(default: 256x256)")
+        ("window-size,w",
+         po::value<size_t>(&windowSize)->default_value(3),
+                       "size of the window for the calculation of local "
+                       "higher order moments (default: 3)")
     ;
+
     po::options_description hidden("Hidden options");
     hidden.add_options()
         ("input-file",
